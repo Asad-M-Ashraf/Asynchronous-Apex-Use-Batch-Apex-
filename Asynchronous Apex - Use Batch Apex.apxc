@@ -1,0 +1,62 @@
+------------------------------------------LeadProcessor-------------------------------------------
+
+public class LeadProcessor implements Database.Batchable<sObject> {
+	
+    // start method returning the QueryLocator
+    public Database.QueryLocator start(Database.BatchableContext bc){
+        return Database.getQueryLocator('Select id From Lead');
+    }
+    
+    // execute method
+    public void execute(Database.BatchableContext bc, List<Lead> leadsContext){
+        // process each batch of records
+        List<Lead> leads = new List<Lead>();
+        // looping through all the Lead objects and Updating the LeadSource field value to "Dreamforce"
+        for (Lead lead: leadsContext){
+            lead.LeadSource = 'Dreamforce';
+            leads.add(lead);
+        }
+        update leads;
+    }
+    
+    // finish method
+    public static void finish(Database.BatchableContext bc){
+        AsyncApexJob job = [SELECT Id, Status, NumberOfErrors, JobItemsProcessed, TotalJobItems, CreatedBy.Email FROM AsyncApexJob WHERE Id = :bc.getJobId()];
+        System.debug(job);
+    }
+}
+
+--------------------------------------------LeadProcessorTest--------------------------------------------
+@isTest
+public class LeadProcessorTest {
+	// @testSetup
+    // static void testSetup(){
+    //    
+    // }
+    @isTest
+    static void test(){
+        
+        // creating test data (200 Leads)
+        List<Lead> leads = new List<Lead>();
+        for (integer i = 0; i < 200; i++){
+            leads.add(new Lead(Company = 'Test ' + i, 
+                               FirstName = 'FirstName', 
+                               LastName = 'LastName ' + i));
+        }
+        	insert leads;
+        
+        // invoking the Batch class
+        Test.startTest();
+        LeadProcessor leadProcessorObject = new LeadProcessor();
+        Id batchId = Database.executeBatch(leadProcessorObject);
+        Test.stopTest();
+        // assertEqual
+        List<Lead> leadSource = [SELECT LeadSource FROM Lead Limit 1]; 
+        String leadSourceActual = leadSource[0].LeadSource?.toString();
+        String expected = 'Dreamforce';
+        Assert.isTrue(leadSourceActual != '');
+        
+        System.assertEquals(expected, leadSourceActual);
+        System.assertEquals(200, [SELECT count() FROM Lead WHERE LeadSource='Dreamforce']);
+    }
+}
